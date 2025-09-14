@@ -1,0 +1,25 @@
+# ddev-generated
+# Docker compose file for localtunnel service
+---
+version: '3.6'
+
+services:
+  localtunnel:
+    container_name: ddev-${DDEV_SITENAME}-localtunnel
+    image: node:16-alpine
+    restart: "no"
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: $DDEV_APPROOT
+    command: >
+      sh -c "
+        npm install -g localtunnel &&
+        lt --port 80 --host web --subdomain ${DDEV_SITENAME} --print-requests
+      "
+    networks: [default, ddev_default]
+    depends_on:
+      - web
+
+networks:
+  ddev_default:
+    external: true
