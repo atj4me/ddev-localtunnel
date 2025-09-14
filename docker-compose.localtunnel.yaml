@@ -1,0 +1,36 @@
+# ddev-generated
+# Docker compose file for localtunnel service
+---
+version: '3.6'
+
+services:
+  localtunnel:
+    container_name: ddev-${DDEV_SITENAME}-localtunnel
+    image: node:18-alpine
+    restart: "no"
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: $DDEV_APPROOT
+    environment:
+      - DDEV_SITENAME=${DDEV_SITENAME}
+    command: >
+      sh -c "
+        echo 'Installing localtunnel...' &&
+        npm install -g localtunnel &&
+        echo 'Localtunnel installed successfully' &&
+        echo 'Container ready for tunnel commands...' &&
+        while true; do sleep 30; done
+      "
+    healthcheck:
+      test: ["CMD", "which", "lt"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks: [default, ddev_default]
+    depends_on:
+      - web
+
+networks:
+  ddev_default:
+    external: true

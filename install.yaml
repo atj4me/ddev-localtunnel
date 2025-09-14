@@ -1,0 +1,33 @@
+# ddev-generated
+# DDEV Localtunnel addon
+# This addon provides localtunnel functionality for sharing DDEV projects
+# Repository: https://github.com/atj4me/ddev-localtunnel
+---
+name: ddev-localtunnel
+
+project_files:
+  - docker-compose.localtunnel.yaml
+
+global_files:
+  - commands/host/lt
+
+ddev_version_constraint: '>= v1.24.3'
+
+pre_install_actions: []
+
+post_install_actions:
+  - |
+    #ddev-description:Show installation success and usage instructions
+    echo ""
+    echo "🚀 DDEV Localtunnel addon installed successfully!"
+    echo ""
+    echo "Usage:"
+    echo "  ddev lt share   # Start sharing your project publicly"
+    echo "  ddev lt stop    # Stop the tunnel"
+    echo "  ddev lt status  # Check tunnel status"
+    echo ""
+    echo "⚠️  Security reminder: The tunnel makes your dev site publicly accessible!"
+    echo ""
+  - |
+    #ddev-description:Run addon update checker
+    curl -fsSL https://ddev.com/s/addon-update-checker.sh | bash || true
