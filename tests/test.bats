@@ -48,6 +48,22 @@ health_checks() {
   assert_success
   assert_output "true"
 
+  # Check that localtunnel container is running
+  run docker ps --filter "name=ddev-${PROJNAME}-localtunnel" --format "{{.Names}}"
+  assert_success
+  assert_output "ddev-${PROJNAME}-localtunnel"
+
+  # Wait for container to be healthy (localtunnel installed)
+  echo "Waiting for localtunnel service to be ready..." >&3
+  timeout=60
+  while [ $timeout -gt 0 ]; do
+    if docker inspect "ddev-${PROJNAME}-localtunnel" --format='{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy"; then
+      break
+    fi
+    sleep 2
+    timeout=$((timeout - 2))
+  done
+
   # Check that lt command exists and responds
   run ddev lt status
   assert_success
@@ -58,6 +74,10 @@ health_checks() {
   assert_output --partial "share"
   assert_output --partial "stop"
   assert_output --partial "status"
+
+  # Test that localtunnel is installed in the container
+  run ddev exec -s localtunnel which lt
+  assert_success
 }
 
 teardown() {
@@ -162,5 +182,32 @@ teardown() {
 
   # Test stop command when nothing is running (should not fail)
   run ddev lt stop
+  assert_success
+}
+
+@test "localtunnel package is installed in container" {
+  set -eu -o pipefail
+  run ddev add-on get "${DIR}"
+  assert_success
+  run ddev restart -y
+  assert_success
+
+  # Wait for container to be healthy
+  echo "Waiting for localtunnel to be installed..." >&3
+  timeout=60
+  while [ $timeout -gt 0 ]; do
+    if docker inspect "ddev-${PROJNAME}-localtunnel" --format='{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy"; then
+      break
+    fi
+    sleep 2
+    timeout=$((timeout - 2))
+  done
+
+  # Test that localtunnel is available in the container
+  run ddev exec -s localtunnel which lt
+  assert_success
+
+  # Test that we can get version info
+  run ddev exec -s localtunnel lt --version
   assert_success
 }
