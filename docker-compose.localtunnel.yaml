@@ -6,15 +6,18 @@ version: '3.6'
 services:
   localtunnel:
     container_name: ddev-${DDEV_SITENAME}-localtunnel
-    image: node:16-alpine
+    image: node:18-alpine
     restart: "no"
     labels:
       com.ddev.site-name: ${DDEV_SITENAME}
       com.ddev.approot: $DDEV_APPROOT
+    environment:
+      - DDEV_SITENAME=${DDEV_SITENAME}
     command: >
       sh -c "
         npm install -g localtunnel &&
-        lt --port 80 --host web --subdomain ${DDEV_SITENAME} --print-requests
+        echo 'Localtunnel installed, ready to start...' &&
+        while true; do sleep 3600; done
       "
     networks: [default, ddev_default]
     depends_on:

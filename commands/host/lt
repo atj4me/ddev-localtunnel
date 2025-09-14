@@ -21,54 +21,87 @@ function usage() {
     echo "  ddev lt status   # Check tunnel status"
 }
 
+function check_service_running() {
+    if ! docker ps --filter "name=ddev-${DDEV_SITENAME}-localtunnel" --format "{{.Names}}" | grep -q "ddev-${DDEV_SITENAME}-localtunnel"; then
+        echo "❌ Localtunnel service is not running. Please run 'ddev start' first."
+        exit 1
+    fi
+}
+
 function start_tunnel() {
+    check_service_running
+    
     echo "Starting localtunnel for ${DDEV_SITENAME}..."
     
-    # Start the localtunnel container
-    docker-compose -f .ddev/docker-compose.localtunnel.yaml up -d
+    # Stop any existing tunnel process
+    ddev exec -s localtunnel pkill -f "lt --port" 2>/dev/null || true
+    
+    # Start the tunnel in the background and capture the output
+    ddev exec -s localtunnel sh -c "
+        nohup lt --port 80 --host web --subdomain ${DDEV_SITENAME} --print-requests > /tmp/localtunnel.log 2>&1 &
+        echo \$! > /tmp/localtunnel.pid
+    " 2>/dev/null
     
     echo "Waiting for tunnel to establish..."
     sleep 5
     
     # Get the tunnel URL from the container logs
     local tunnel_url
-    tunnel_url=$(docker logs ddev-${DDEV_SITENAME}-localtunnel 2>&1 | grep -o 'https://.*\.loca\.lt' | tail -1)
+    tunnel_url=$(ddev exec -s localtunnel cat /tmp/localtunnel.log 2>/dev/null | grep -o 'https://.*\.loca\.lt' | tail -1 || echo "")
     
     if [ -n "$tunnel_url" ]; then
         echo ""
         echo "🌐 Your project is now publicly accessible at:"
         echo "   $tunnel_url"
         echo ""
-        echo "📌 This tunnel will remain active until you run 'ddev lt stop'"
+        echo "📌 This tunnel will remain active until you run 'ddev lt stop' or 'ddev stop'"
         echo "⚠️  Warning: Your development site is now publicly accessible!"
     else
-        echo "❌ Failed to retrieve tunnel URL. Check logs with:"
-        echo "   docker logs ddev-${DDEV_SITENAME}-localtunnel"
+        echo "❌ Failed to retrieve tunnel URL. Check if the service is running properly."
+        echo "   You can check logs with: ddev exec -s localtunnel cat /tmp/localtunnel.log"
     fi
 }
 
 function stop_tunnel() {
+    check_service_running
+    
     echo "Stopping localtunnel for ${DDEV_SITENAME}..."
-    docker-compose -f .ddev/docker-compose.localtunnel.yaml down
+    
+    # Kill the tunnel process
+    ddev exec -s localtunnel sh -c "
+        if [ -f /tmp/localtunnel.pid ]; then
+            kill \$(cat /tmp/localtunnel.pid) 2>/dev/null || true
+            rm -f /tmp/localtunnel.pid
+        fi
+        pkill -f 'lt --port' 2>/dev/null || true
+        rm -f /tmp/localtunnel.log
+    " 2>/dev/null
+    
     echo "✅ Localtunnel stopped"
 }
 
 function tunnel_status() {
-    local container_status
-    container_status=$(docker ps --filter "name=ddev-${DDEV_SITENAME}-localtunnel" --format "{{.Status}}" | head -1)
+    check_service_running
     
-    if [ -n "$container_status" ]; then
-        echo "🟢 Localtunnel is running: $container_status"
+    # Check if tunnel process is running
+    local tunnel_running
+    tunnel_running=$(ddev exec -s localtunnel sh -c "pgrep -f 'lt --port' > /dev/null && echo 'yes' || echo 'no'" 2>/dev/null)
+    
+    if [ "$tunnel_running" = "yes" ]; then
+        echo "🟢 Localtunnel is running"
         
         # Try to get the tunnel URL
         local tunnel_url
-        tunnel_url=$(docker logs ddev-${DDEV_SITENAME}-localtunnel 2>&1 | grep -o 'https://.*\.loca\.lt' | tail -1)
+        tunnel_url=$(ddev exec -s localtunnel cat /tmp/localtunnel.log 2>/dev/null | grep -o 'https://.*\.loca\.lt' | tail -1 || echo "")
         
         if [ -n "$tunnel_url" ]; then
             echo "🌐 Public URL: $tunnel_url"
+        else
+            echo "🔄 Tunnel starting up or URL not yet available"
         fi
     else
         echo "🔴 Localtunnel is not running"
+        echo "💡 Use 'ddev lt share' to start the tunnel"
     fi
 }
 
